@@ -16,11 +16,12 @@ class Data(object):
     """
     
     def __init__(self, cfg): 
-        self.cfg = cfg
         self.num_agents = cfg.num_agents
+        self.prob = cfg.prob
+        self.corr = cfg.corr
         
         
-    def sample_ranking(self, N, prob = None):
+    def sample_ranking(self, N, prob):
         """ 
         Samples ranked lists
         Arguments
@@ -29,9 +30,7 @@ class Data(object):
         Returns:
             Ranked List of shape [N, Num_agents]
         """
-        
-        if prob is None: prob = self.cfg.prob
-                      
+                              
         N_trunc = int(N * prob)
         P = generate_permutation_array(N, self.num_agents) + 1
                
@@ -69,7 +68,7 @@ class Data(object):
         return M/self.num_agents
     
         
-    def generate_batch(self, batch_size, prob = None):
+    def generate_batch(self, batch_size, prob = None, corr = None):
         """
         Samples a batch of data from training
         Arguments
@@ -82,55 +81,31 @@ class Data(object):
                 Q_{ij}: How much Woman-j prefers to be with Man-i
         """
 
+        if corr is None: corr = self.corr
+        if prob is None: prob = self.prob
+        
         N = batch_size * self.num_agents
         
         P = self.sample_ranking(N, prob)
         Q = self.sample_ranking(N, prob) 
         
-        
         P = P.reshape(-1, self.num_agents, self.num_agents)                           
         Q = Q.reshape(-1, self.num_agents, self.num_agents)
+                
+        if corr > 0.00:
+            P_common = self.sample_ranking(batch_size, prob).reshape(batch_size, 1, self.num_agents)
+            Q_common = self.sample_ranking(batch_size, prob).reshape(batch_size, 1, self.num_agents)
+        
+            P_idx = np.random.binomial(1, corr, [batch_size, self.num_agents, 1])
+            Q_idx = np.random.binomial(1, corr, [batch_size, self.num_agents, 1])
+        
+            P = P * (1 - P_idx) + P_common * P_idx
+            Q = Q * (1 - Q_idx) + Q_common * Q_idx
+            
         Q = Q.transpose(0, 2, 1)
                 
         return P, Q
-    
-    
-    def generate_batch_with_corr(self, batch_size, prob = None):
-        """
-        Samples a batch of data from training
-        Arguments
-            batch_size: number of samples
-            prob: probability of truncation
-        Returns
-            P: Men's preferences, 
-                P_{ij}: How much Man-i prefers to be Women-j
-            Q: Women's preferences,
-                Q_{ij}: How much Woman-j prefers to be with Man-i
-        """
 
-        N = batch_size * self.num_agents
-        
-        P = self.sample_ranking(N, prob)
-        Q = self.sample_ranking(N, prob)
-        
-        
-        P = P.reshape(-1, self.num_agents, self.num_agents)                           
-        Q = Q.reshape(-1, self.num_agents, self.num_agents)
-                
-        P_common = self.sample_ranking(batch_size, prob).reshape(batch_size, 1, self.num_agents)
-        Q_common = self.sample_ranking(batch_size, prob).reshape(batch_size, 1, self.num_agents)
-        
-        P_idx = np.random.binomial(1, self.cfg.corr, [batch_size, self.num_agents, 1])
-        Q_idx = np.random.binomial(1, self.cfg.corr, [batch_size, self.num_agents, 1])
-        
-        P = P * (1 - P_idx) + P_common * P_idx
-        Q = Q * (1 - Q_idx) + Q_common * Q_idx
-        
-        Q = Q.transpose(0, 2, 1)
-                
-        return P, Q
-    
-    
     def compose_misreport(self, P, Q, M, agent_idx, is_P = True):
         """ Composes mis-report
         Arguments:
@@ -193,6 +168,9 @@ class Data(object):
         Returns:
             P_mis, Q_mis: [batch-size, num_misreports_per_sample, num_agents, num_agents]
         """
+        
+        if prob is None: prob = self.cfg.prob
+                
         N = P.shape[0]
         M = self.sample_ranking(N * num_misreports_per_sample, prob).reshape(N, num_misreports_per_sample, -1)
         P_mis, Q_mis = self.compose_misreport(P, Q, M, agent_idx, is_P)

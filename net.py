@@ -11,9 +11,8 @@ class Net(nn.Module):
         num_agents = self.cfg.num_agents
         num_hidden_nodes = self.cfg.num_hidden_nodes
         
-        # Input layer
         self.input_block = nn.Sequential( 
-            # Layer 0
+            # Input Layer
             nn.Linear(2 * (num_agents**2), num_hidden_nodes),
             nn.LeakyReLU(),
             
@@ -34,7 +33,7 @@ class Net(nn.Module):
             nn.LeakyReLU())
             
                 
-        # Output layers
+        # Output Layer
         self.layer_out_r = nn.Linear(num_hidden_nodes, (num_agents + 1) * num_agents)
         self.layer_out_c = nn.Linear(num_hidden_nodes, num_agents * (num_agents + 1))
         

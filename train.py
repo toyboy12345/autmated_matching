@@ -12,30 +12,27 @@ import torch.nn.functional as F
 from data import Data
 from net import Net
 
-
 parser = argparse.ArgumentParser()
-
 parser.add_argument('-n', '--num_agents', action='store',
                     dest='num_agents', required=True, type=int,
                     help='Num Agents')
-
 parser.add_argument('-l', '--lambd', action='store',
                     dest='lambd', required=True, type=float,
                     help='Lambda')
-
 parser.add_argument('-p', '--prob', action='store',
                     dest='prob', default=0.2 , type=float,
                     help='Truncation Probability')
-
 parser.add_argument('-s', '--seed', action='store',
                     dest='seed', default=0, type=int,
                     help='Random Seed')
-
+parser.add_argument('-c', '--corr', action='store',
+                    dest='corr', required=True, type=float,
+                    help='Correlation Probability')
 cmd_args = parser.parse_args()
 
 # Hyperparameters
+# LR - [1e-3, 5e-3]
 
-# 0 - trunc 1e-3 ow 5e-3
 class HParams:
     def __init__(self):
         self.num_agents = cmd_args.num_agents
@@ -54,7 +51,7 @@ class HParams:
         # Higher lambd => More stability
         self.lambd = cmd_args.lambd
         # Correlation of rankings
-        self.corr = 0.00
+        self.corr = cmd_args.corr
         # Run seed
         self.seed = cmd_args.seed
         
@@ -96,7 +93,7 @@ model.to(device)
 
 def torch_var(x): return torch.Tensor(x).to(device)
 
-# Loss functions
+# Stability Violation
 def compute_st(r, p, q):        
     wp = F.relu(p[:, :, None, :] - p[:, :, :, None])
     wq = F.relu(q[:, :, None, :] - q[:, None, :, :], 0)  
@@ -107,12 +104,14 @@ def compute_st(r, p, q):
     regret =  rgt_1 * rgt_2 
     return regret.sum(-1).sum(-1).mean()/cfg.num_agents
 
+# IR Violation
 def compute_ir(r, p, q):
     ir_1 = r * F.relu(-q)
     ir_2 = r * F.relu(-p)
     ir = ir_1 + ir_2
     return ir.sum(-1).sum(-1).mean()/cfg.num_agents
 
+# FOSD Violation
 def compute_ic_FOSD(r, p, q, P, Q, r_mult = 1):
             
     IC_viol_P = torch.zeros(cfg.num_agents).to(device)
