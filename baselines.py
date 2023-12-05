@@ -354,3 +354,25 @@ def compute_DA_batch_switch(P, Q):
     womenPreferences = np.argsort(-Q, axis = -2)
     return numba_DA(P, Q, menPreferences, womenPreferences).transpose(0, 2, 1)
 
+def compute_algo1(p,q):
+    n = len(p)
+    r = torch.zeros(n,n)
+    for w in range(n):
+        for f in range(n):
+            if (p[w,f]>0) and (q[w,f]>0):
+                nf = len([i for i in range(n) if p[i,f]>0])
+                mw = len([i for i in range(n) if q[w,i]>0])
+
+                r[w,f] = 1/max(nf,mw)
+    return r
+    
+def compute_algo1_batch(P,Q):
+    r = None
+    n = len(P[0])
+    for (p,q) in zip(P,Q):
+        if r == None:
+            r = compute_algo1(p,q)
+        else:
+            r = torch.vstack((r,compute_algo1(p,q)))
+    return torch.reshape(r,(-1,n,n))
+    
