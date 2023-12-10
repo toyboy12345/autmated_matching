@@ -190,7 +190,11 @@ def train_net(cfg, G, model):
                     p, q = torch.Tensor(P).to(cfg.device), torch.Tensor(Q).to(cfg.device)
                     r = model(p, q)
                     st_loss = compute_st(r, p, q, cfg)
-                    ic_loss,ic_loss2 = compute_ic_FOSD(model, r, p, q, P, Q, cfg, lagr_mult=lagr_mult)
+
+                    if not cfg.lagr_mult:
+                        ic_loss = compute_ic_FOSD(model, r, p, q, P, Q, cfg)
+                    if cfg.lagr_mult:
+                        ic_loss,ic_loss2 = compute_ic_FOSD(model, r, p, q, P, Q, cfg, lagr_mult=lagr_mult)
                     val_st_loss += st_loss.item()
                     val_ic_loss += ic_loss.item()
                 logger.info("\t[VAL-ITER]: %d, [ST-Loss]: %f, [IC-Loss]: %f"%(i, val_st_loss/cfg.num_val_batches, val_ic_loss/cfg.num_val_batches))
