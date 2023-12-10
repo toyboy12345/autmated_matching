@@ -43,10 +43,9 @@ class HParams:
         self.lagr_iter = lagr_iter
         self.rho = rho
 
-def torch_var(x): return torch.Tensor(x).to(device)
 
 # Stability Violation
-def compute_st(r, p, q):
+def compute_st(r, p, q, cfg):
     wp = F.relu(p[:, :, None, :] - p[:, :, :, None])
     wq = F.relu(q[:, :, None, :] - q[:, None, :, :], 0)
     t = (1 - torch.sum(r, dim = 1, keepdim = True))
@@ -57,24 +56,26 @@ def compute_st(r, p, q):
     return regret.sum(-1).sum(-1).mean()/cfg.num_agents
 
 # IR Violation
-def compute_ir(r, p, q):
+def compute_ir(r, p, q, cfg):
     ir_1 = r * F.relu(-q)
     ir_2 = r * F.relu(-p)
     ir = ir_1 + ir_2
     return ir.sum(-1).sum(-1).mean()/cfg.num_agents
 
 # FOSD Violation
-def compute_ic_FOSD(r, p, q, P, Q, cfg, r_mult = 1, lagr_mult = None):
+def compute_ic_FOSD(model, r, p, q, P, Q, cfg, r_mult = 1, lagr_mult = None):
 
-    IC_viol_P = torch.zeros(cfg.num_agents).to(device)
-    IC_viol_Q = torch.zeros(cfg.num_agents).to(device)
+    G = Data(cfg)
 
-    discount = torch_var((r_mult) ** np.arange(cfg.num_agents))
+    IC_viol_P = torch.zeros(cfg.num_agents).to(cfg.device)
+    IC_viol_Q = torch.zeros(cfg.num_agents).to(cfg.device)
+
+    discount = torch.Tensor(((r_mult) ** np.arange(cfg.num_agents))).to(cfg.device)
 
     for agent_idx in range(cfg.num_agents):
 
         P_mis, Q_mis = G.generate_all_misreports(P, Q, agent_idx = agent_idx, is_P = True, include_truncation = True)
-        p_mis, q_mis = torch_var(P_mis), torch_var(Q_mis)
+        p_mis, q_mis = torch.Tensor(P_mis).to(cfg.device), torch.Tensor(Q_mis).to(cfg.device)
         r_mis = model(p_mis.view(-1, cfg.num_agents, cfg.num_agents), q_mis.view(-1, cfg.num_agents, cfg.num_agents))
         r_mis = r_mis.view(*P_mis.shape)
 
@@ -86,7 +87,7 @@ def compute_ic_FOSD(r, p, q, P, Q, cfg, r_mult = 1, lagr_mult = None):
         IC_viol_P[agent_idx] = F.relu(fosd_viol).max(-1)[0].max(-1)[0].mean(-1)
 
         P_mis, Q_mis = G.generate_all_misreports(P, Q, agent_idx = agent_idx, is_P = False, include_truncation = True)
-        p_mis, q_mis = torch_var(P_mis), torch_var(Q_mis)
+        p_mis, q_mis = torch.Tensor(P_mis).to(cfg.device), torch.Tensor(Q_mis).to(cfg.device)
         r_mis = model(p_mis.view(-1, cfg.num_agents, cfg.num_agents), q_mis.view(-1, cfg.num_agents, cfg.num_agents))
         r_mis = r_mis.view(*Q_mis.shape)
 
@@ -106,6 +107,28 @@ def compute_ic_FOSD(r, p, q, P, Q, cfg, r_mult = 1, lagr_mult = None):
         return IC_viol, IC_viol2
 
 def train_net(cfg, G, model):
+    # File names
+    root_dir = os.path.join("experiments", "agents_%d"%(cfg.num_agents), "corr_%.2f"%(cfg.corr))
+    log_fname = os.path.join(root_dir, "LOG_%d_lambd_%f_prob_%.2f_corr_%.2f.txt"%(cfg.seed, cfg.lambd, cfg.prob, cfg.corr))
+    model_path = os.path.join(root_dir, "MODEL_%d_lambd_%f_prob_%.2f_corr_%.2f"%(cfg.seed, cfg.lambd, cfg.prob, cfg.corr))
+    os.makedirs(root_dir, exist_ok=True)
+
+    # # Logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    handler = logging.FileHandler(log_fname, 'w')
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
     # Optimizer
     opt = torch.optim.Adam(model.parameters(), lr = cfg.lr)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(opt, milestones=[10000,25000], gamma=0.5)
@@ -124,20 +147,20 @@ def train_net(cfg, G, model):
 
         # Inference
         P, Q = G.generate_batch(cfg.batch_size)
-        p, q = torch_var(P), torch_var(Q)
+        p, q = torch.Tensor(P).to(cfg.device), torch.Tensor(Q).to(cfg.device)
         r = model(p, q)
 
         # Compute loss
-        st_loss = compute_st(r, p, q)
+        st_loss = compute_st(r, p, q, cfg)
 
         if not cfg.lagr_mult:
-            ic_loss = compute_ic_FOSD(r, p, q, P, Q, cfg)
+            ic_loss = compute_ic_FOSD(model, r, p, q, P, Q, cfg)
 
             total_loss = st_loss * (cfg.lambd) + ic_loss * (1 - cfg.lambd)
             total_loss.backward()
 
         if cfg.lagr_mult:
-            ic_loss, ic_loss2 = compute_ic_FOSD(r, p, q, P, Q, cfg, lagr_mult=lagr_mult)
+            ic_loss, ic_loss2 = compute_ic_FOSD(model, r, p, q, P, Q, cfg, lagr_mult=lagr_mult)
             total_loss = st_loss + ic_loss + ic_loss2
             total_loss.backward()
 
@@ -164,9 +187,9 @@ def train_net(cfg, G, model):
                 val_ic_loss = 0.0
                 for j in range(cfg.num_val_batches):
                     P, Q = G.generate_batch(cfg.batch_size)
-                    p, q = torch_var(P), torch_var(Q)
+                    p, q = torch.Tensor(P).to(cfg.device), torch.Tensor(Q).to(cfg.device)
                     r = model(p, q)
-                    st_loss = compute_st(r, p, q)
+                    st_loss = compute_st(r, p, q, cfg)
                     ic_loss,ic_loss2 = compute_ic_FOSD(r, p, q, P, Q, cfg, lagr_mult=lagr_mult)
                     val_st_loss += st_loss.item()
                     val_ic_loss += ic_loss.item()
