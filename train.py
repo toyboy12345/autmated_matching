@@ -117,17 +117,18 @@ def train_net(cfg, G, model):
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    if not logger.hasHandlers():
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
 
-    handler = logging.FileHandler(log_fname, 'w')
-    handler.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+        handler = logging.FileHandler(log_fname, 'w')
+        handler.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
 
     # Optimizer
     opt = torch.optim.Adam(model.parameters(), lr = cfg.lr)
