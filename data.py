@@ -16,6 +16,7 @@ class Data(object):
     """
     
     def __init__(self, cfg): 
+        self.cfg = cfg
         self.num_agents = cfg.num_agents
         self.prob = cfg.prob
         self.corr = cfg.corr

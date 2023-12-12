@@ -64,11 +64,13 @@ def compute_ir(r, p, q):
     return ir.sum(-1).sum(-1).mean()/p.shape[1]
 
 # FOSD Violation
-def compute_ic_FOSD(model, r, p, q, P, Q, r_mult = 1, lagr_mult = 0):
+def compute_ic_FOSD(model, G, r, p, q, r_mult = 1, lagr_mult = 0, use_lagr = False):
 
-    G = Data(model.cfg)
-    num_agents = p.shape[1]
-    device = model.cfg.device
+    cfg = G.cfg
+    num_agents = cfg.num_agents
+    device = cfg.device
+
+    P,Q = p.to('cpu').detach().numpy().copy(),q.to('cpu').detach().numpy().copy()
 
     IC_viol_P = torch.zeros(num_agents).to(device)
     IC_viol_Q = torch.zeros(num_agents).to(device)
@@ -101,16 +103,28 @@ def compute_ic_FOSD(model, r, p, q, P, Q, r_mult = 1, lagr_mult = 0):
         fosd_viol = torch.cumsum(torch.gather(r_diff, -1, idx) * discount, -1)
         IC_viol_Q[agent_idx] = F.relu(fosd_viol).max(-1)[0].max(-1)[0].mean(-1)
 
-    if model.cfg.use_lagr:
+    if use_lagr:
         IC_viol = lagr_mult*(IC_viol_P.mean() + IC_viol_Q.mean())*0.5
-        IC_viol2 = (torch.square(IC_viol_P).mean() + torch.square(IC_viol_Q).mean())*0.25*model.cfg.rho
+        IC_viol2 = (torch.square(IC_viol_P).mean() + torch.square(IC_viol_Q).mean())*0.25*cfg.rho
         return IC_viol, IC_viol2
 
     else:
         IC_viol = (IC_viol_P.mean() + IC_viol_Q.mean())*0.5
         return IC_viol
 
-    
+def eval_model(model, G, P, Q, rtn = False):
+    num_agents = G.cfg.num_agents
+    device = G.cfg.device
+    p,q = torch.Tensor(P).to(device),torch.Tensor(Q).to(device)
+    r = model(p,q)
+    ic_FOSD = compute_ic_FOSD(model,G,r,p,q)
+    ic_loss = ic_FOSD[0] if type(ic_FOSD)==tuple else ic_FOSD
+    st_loss = compute_st(r,p,q)
+    ir_loss = compute_ir(r,p,q)
+
+    print(f"ic_loss: {ic_loss:.10f}, st_loss: {st_loss:.10f}, ir_loss: {ir_loss:.10f}")
+    if rtn:
+        return ic_loss, st_loss, ir_loss
 
 def train_net(cfg, G, model):
     # File names
@@ -161,7 +175,7 @@ def train_net(cfg, G, model):
         st_loss = compute_st(r, p, q)
 
         if cfg.use_lagr:
-            ic_loss, ic_loss2 = compute_ic_FOSD(model, r, p, q, P, Q, lagr_mult=lagr_mult)
+            ic_loss, ic_loss2 = compute_ic_FOSD(model, G, r, p, q, lagr_mult=lagr_mult, use_lagr=True)
             total_loss = st_loss + ic_loss + ic_loss2
             total_loss.backward()
 
@@ -169,7 +183,7 @@ def train_net(cfg, G, model):
                 lagr_mult += cfg.rho * ic_loss.item()
         
         else:
-            ic_loss = compute_ic_FOSD(model, r, p, q, P, Q)
+            ic_loss = compute_ic_FOSD(model, G, r, p, q)
 
             total_loss = st_loss * (cfg.lambd) + ic_loss * (1 - cfg.lambd)
             total_loss.backward()
@@ -199,9 +213,9 @@ def train_net(cfg, G, model):
                     st_loss = compute_st(r, p, q)
                     
                     if cfg.use_lagr:
-                        ic_loss,ic_loss2 = compute_ic_FOSD(model, r, p, q, P, Q, lagr_mult=lagr_mult)
+                        ic_loss,ic_loss2 = compute_ic_FOSD(model, G, r, p, q, lagr_mult=lagr_mult, use_lagr=True)
                     else:
-                        ic_loss = compute_ic_FOSD(model, r, p, q, P, Q)
+                        ic_loss = compute_ic_FOSD(model, G, r, p, q)
 
                     val_st_loss += st_loss.item()
                     val_ic_loss += ic_loss.item()
