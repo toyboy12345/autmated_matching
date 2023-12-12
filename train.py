@@ -16,7 +16,7 @@ from net import Net
 
 class HParams:
     def __init__(self, num_agents = 3, prob = 0.5, lambd = 0.1, corr = 0, seed = 0, device = "cuda:0",
-                 lagr_mult = None, lagr_iter = None, rho = None):
+                 use_lagr = False, lagr_mult = None, lagr_iter = None, rho = None):
         self.num_agents = num_agents
         self.batch_size = 1024
         self.num_hidden_layers = 4
@@ -39,13 +39,14 @@ class HParams:
 
         self.device = device
 
+        self.use_lagr = use_lagr
         self.lagr_mult = lagr_mult
         self.lagr_iter = lagr_iter
         self.rho = rho
 
 
 # Stability Violation
-def compute_st(r, p, q, cfg):
+def compute_st(r, p, q):
     wp = F.relu(p[:, :, None, :] - p[:, :, :, None])
     wq = F.relu(q[:, :, None, :] - q[:, None, :, :], 0)
     t = (1 - torch.sum(r, dim = 1, keepdim = True))
@@ -53,30 +54,32 @@ def compute_st(r, p, q, cfg):
     rgt_1 = torch.einsum('bjc,bijc->bic', r, wq) + t * F.relu(q)
     rgt_2 = torch.einsum('bia,biac->bic', r, wp) + s * F.relu(p)
     regret =  rgt_1 * rgt_2
-    return regret.sum(-1).sum(-1).mean()/cfg.num_agents
+    return regret.sum(-1).sum(-1).mean()/p.shape[1]
 
 # IR Violation
-def compute_ir(r, p, q, cfg):
+def compute_ir(r, p, q):
     ir_1 = r * F.relu(-q)
     ir_2 = r * F.relu(-p)
     ir = ir_1 + ir_2
-    return ir.sum(-1).sum(-1).mean()/cfg.num_agents
+    return ir.sum(-1).sum(-1).mean()/p.shape[1]
 
 # FOSD Violation
-def compute_ic_FOSD(model, r, p, q, P, Q, cfg, r_mult = 1, lagr_mult = None):
+def compute_ic_FOSD(model, r, p, q, P, Q, r_mult = 1, lagr_mult = 0):
 
-    G = Data(cfg)
+    G = Data(model.cfg)
+    num_agents = p.shape[1]
+    device = model.cfg.device
 
-    IC_viol_P = torch.zeros(cfg.num_agents).to(cfg.device)
-    IC_viol_Q = torch.zeros(cfg.num_agents).to(cfg.device)
+    IC_viol_P = torch.zeros(num_agents).to(device)
+    IC_viol_Q = torch.zeros(num_agents).to(device)
 
-    discount = torch.Tensor(((r_mult) ** np.arange(cfg.num_agents))).to(cfg.device)
+    discount = torch.Tensor(((r_mult) ** np.arange(num_agents))).to(device)
 
-    for agent_idx in range(cfg.num_agents):
+    for agent_idx in range(num_agents):
 
         P_mis, Q_mis = G.generate_all_misreports(P, Q, agent_idx = agent_idx, is_P = True, include_truncation = True)
-        p_mis, q_mis = torch.Tensor(P_mis).to(cfg.device), torch.Tensor(Q_mis).to(cfg.device)
-        r_mis = model(p_mis.view(-1, cfg.num_agents, cfg.num_agents), q_mis.view(-1, cfg.num_agents, cfg.num_agents))
+        p_mis, q_mis = torch.Tensor(P_mis).to(device), torch.Tensor(Q_mis).to(device)
+        r_mis = model(p_mis.view(-1, num_agents, num_agents), q_mis.view(-1, num_agents, num_agents))
         r_mis = r_mis.view(*P_mis.shape)
 
         r_diff = (r_mis[:, :, agent_idx, :] - r[:, None, agent_idx, :])*(p[:, None, agent_idx, :] > 0).float()
@@ -87,8 +90,8 @@ def compute_ic_FOSD(model, r, p, q, P, Q, cfg, r_mult = 1, lagr_mult = None):
         IC_viol_P[agent_idx] = F.relu(fosd_viol).max(-1)[0].max(-1)[0].mean(-1)
 
         P_mis, Q_mis = G.generate_all_misreports(P, Q, agent_idx = agent_idx, is_P = False, include_truncation = True)
-        p_mis, q_mis = torch.Tensor(P_mis).to(cfg.device), torch.Tensor(Q_mis).to(cfg.device)
-        r_mis = model(p_mis.view(-1, cfg.num_agents, cfg.num_agents), q_mis.view(-1, cfg.num_agents, cfg.num_agents))
+        p_mis, q_mis = torch.Tensor(P_mis).to(device), torch.Tensor(Q_mis).to(device)
+        r_mis = model(p_mis.view(-1, num_agents, num_agents), q_mis.view(-1, num_agents, num_agents))
         r_mis = r_mis.view(*Q_mis.shape)
 
         r_diff = (r_mis[:, :, :, agent_idx] - r[:, None, :, agent_idx])*(q[:, None, :, agent_idx] > 0).float()
@@ -97,14 +100,17 @@ def compute_ic_FOSD(model, r, p, q, P, Q, cfg, r_mult = 1, lagr_mult = None):
 
         fosd_viol = torch.cumsum(torch.gather(r_diff, -1, idx) * discount, -1)
         IC_viol_Q[agent_idx] = F.relu(fosd_viol).max(-1)[0].max(-1)[0].mean(-1)
-    if not cfg.lagr_mult:
+
+    if model.cfg.use_lagr:
+        IC_viol = lagr_mult*(IC_viol_P.mean() + IC_viol_Q.mean())*0.5
+        IC_viol2 = (torch.square(IC_viol_P).mean() + torch.square(IC_viol_Q).mean())*0.25*model.cfg.rho
+        return IC_viol, IC_viol2
+
+    else:
         IC_viol = (IC_viol_P.mean() + IC_viol_Q.mean())*0.5
         return IC_viol
 
-    if cfg.lagr_mult:
-        IC_viol = lagr_mult*(IC_viol_P.mean() + IC_viol_Q.mean())*0.5
-        IC_viol2 = (torch.square(IC_viol_P).mean() + torch.square(IC_viol_Q).mean())*0.25*cfg.rho
-        return IC_viol, IC_viol2
+    
 
 def train_net(cfg, G, model):
     # File names
@@ -152,21 +158,21 @@ def train_net(cfg, G, model):
         r = model(p, q)
 
         # Compute loss
-        st_loss = compute_st(r, p, q, cfg)
+        st_loss = compute_st(r, p, q)
 
-        if not cfg.lagr_mult:
-            ic_loss = compute_ic_FOSD(model, r, p, q, P, Q, cfg)
-
-            total_loss = st_loss * (cfg.lambd) + ic_loss * (1 - cfg.lambd)
-            total_loss.backward()
-
-        if cfg.lagr_mult:
-            ic_loss, ic_loss2 = compute_ic_FOSD(model, r, p, q, P, Q, cfg, lagr_mult=lagr_mult)
+        if cfg.use_lagr:
+            ic_loss, ic_loss2 = compute_ic_FOSD(model, r, p, q, P, Q, lagr_mult=lagr_mult)
             total_loss = st_loss + ic_loss + ic_loss2
             total_loss.backward()
 
             if (i>0) and (i % cfg.lagr_iter == 0):
                 lagr_mult += cfg.rho * ic_loss.item()
+        
+        else:
+            ic_loss = compute_ic_FOSD(model, r, p, q, P, Q)
+
+            total_loss = st_loss * (cfg.lambd) + ic_loss * (1 - cfg.lambd)
+            total_loss.backward()
 
         opt.step()
         scheduler.step()
@@ -190,12 +196,13 @@ def train_net(cfg, G, model):
                     P, Q = G.generate_batch(cfg.batch_size)
                     p, q = torch.Tensor(P).to(cfg.device), torch.Tensor(Q).to(cfg.device)
                     r = model(p, q)
-                    st_loss = compute_st(r, p, q, cfg)
+                    st_loss = compute_st(r, p, q)
+                    
+                    if cfg.use_lagr:
+                        ic_loss,ic_loss2 = compute_ic_FOSD(model, r, p, q, P, Q, lagr_mult=lagr_mult)
+                    else:
+                        ic_loss = compute_ic_FOSD(model, r, p, q, P, Q)
 
-                    if not cfg.lagr_mult:
-                        ic_loss = compute_ic_FOSD(model, r, p, q, P, Q, cfg)
-                    if cfg.lagr_mult:
-                        ic_loss,ic_loss2 = compute_ic_FOSD(model, r, p, q, P, Q, cfg, lagr_mult=lagr_mult)
                     val_st_loss += st_loss.item()
                     val_ic_loss += ic_loss.item()
                 logger.info("\t[VAL-ITER]: %d, [ST-Loss]: %f, [IC-Loss]: %f"%(i, val_st_loss/cfg.num_val_batches, val_ic_loss/cfg.num_val_batches))
