@@ -181,6 +181,7 @@ def train_net(cfg, G, model):
 
             if (i>0) and (i % cfg.lagr_iter == 0):
                 lagr_mult += cfg.rho * ic_loss.item()
+                logger.info("[lambda]: %f"%(lagr_mult))
         
         else:
             ic_loss = compute_ic_FOSD(model, G, r, p, q)
