@@ -134,7 +134,7 @@ class Data(object):
         return P_mis, Q_mis
     
     
-    def generate_all_misreports(self, P, Q, agent_idx, is_P, include_truncation = True):
+    def generate_all_misreports(self, P, Q, agent_idx, is_P, include_truncation = False):
         """ Generates all mis-reports
         Arguments:
             P: Men's preference, [Batch_size, num_agents, num_agents]
