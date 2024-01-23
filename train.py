@@ -158,8 +158,8 @@ def compute_ic_FOSD(model, G, r, p, q, r_mult = 1, lagr_mult = None, use_lagr = 
 
     if use_lagr:
         lagr_mult = torch.Tensor(lagr_mult).to(device)
-        IC_viol = torch.dot(lagr_mult,ic_viol)/(2*num_agents)
-        IC_viol2 = torch.square(ic_viol).mean()*0.5*cfg.rho
+        IC_viol = torch.dot(lagr_mult,ic_viol)
+        IC_viol2 = torch.sum(torch.square(ic_viol))*0.5*cfg.rho
         return IC_viol, IC_viol2, ic_viol
 
     else:
@@ -237,7 +237,7 @@ def train_net(cfg, G, model, include_truncation = None):
         elif cfg.use_lagr == "r":
             st_loss = compute_st(r,p,q)
             ic_loss, ic_loss2, ic_losses = compute_ic_FOSD(model, G, r, p, q, lagr_mult=lagr_mult, use_lagr=True, include_truncation = include_truncation)
-            total_loss = st_loss + ic_loss + ic_loss2
+            total_loss = st_loss + ic_loss/(2*num_agents) + ic_loss2/(2*num_agents)
             total_loss.backward(retain_graph = True)
 
             if (i>0) and (i % cfg.lagr_iter == 0):
