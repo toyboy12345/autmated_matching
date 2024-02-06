@@ -94,9 +94,14 @@ def algo_batch(p,q,model):
     return torch.reshape(r,(-1,3,3))
 
 # Stability Violation
-def compute_st(r, p, q, use_lagr = False):
-    wp = F.relu(p[:, :, None, :] - p[:, :, :, None])
-    wq = F.relu(q[:, :, None, :] - q[:, None, :, :], 0)
+def compute_st(r, p, q, use_lagr = False, zero_one = False):
+    if not zero_one: 
+        wp = F.relu(p[:, :, None, :] - p[:, :, :, None])
+        wq = F.relu(q[:, :, None, :] - q[:, None, :, :], 0)
+    else:
+        wp = torch.where(F.relu(p[:, :, None, :] - p[:, :, :, None])>0,1,0)
+        wq = torch.where(F.relu(q[:, :, None, :] - q[:, None, :, :], 0)>0,1,0)
+
     t = (1 - torch.sum(r, dim = 1, keepdim = True))
     s = (1 - torch.sum(r, dim = 2, keepdim = True))
     rgt_1 = torch.einsum('bjc,bijc->bic', r, wq) + t * F.relu(q)
