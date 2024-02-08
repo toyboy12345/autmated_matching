@@ -19,7 +19,7 @@ class HParams:
                  batch_size = 1024, num_hidden_layers = 4, num_hidden_nodes = 256, lr = 5e-3, epochs = 50000,
                  print_iter = 100, val_iter = 1000, num_val_batches = 200,
                  prob = 0.5, lambd = 0.1, corr = 0, seed = 0, device = "cuda:0",
-                 use_lagr = None, lagr_mult = None, lagr_iter = None, rho = None):
+                 use_lagr = None, lagr_mult = None, lagr_iter = None, rho = None, st_zero_one = False):
         self.num_agents = num_agents
         self.batch_size = batch_size
         self.num_hidden_layers = 4
@@ -46,6 +46,7 @@ class HParams:
         self.lagr_mult = lagr_mult
         self.lagr_iter = lagr_iter
         self.rho = rho
+        self.st_zero_one = st_zero_one
 
 def algo(p_,q_):
     p,q = 4-p_*3,4-q_*3
@@ -99,8 +100,8 @@ def compute_st(r, p, q, use_lagr = False, zero_one = False):
         wp = F.relu(p[:, :, None, :] - p[:, :, :, None])
         wq = F.relu(q[:, :, None, :] - q[:, None, :, :], 0)
     else:
-        wp = torch.where(F.relu(p[:, :, None, :] - p[:, :, :, None])>0,1,0)
-        wq = torch.where(F.relu(q[:, :, None, :] - q[:, None, :, :], 0)>0,1,0)
+        wp = torch.where(F.relu(p[:, :, None, :] - p[:, :, :, None])>0,1,0).to(torch.float)
+        wq = torch.where(F.relu(q[:, :, None, :] - q[:, None, :, :], 0)>0,1,0).to(torch.float)
 
     t = (1 - torch.sum(r, dim = 1, keepdim = True))
     s = (1 - torch.sum(r, dim = 2, keepdim = True))
@@ -109,9 +110,9 @@ def compute_st(r, p, q, use_lagr = False, zero_one = False):
     regret =  rgt_1 * rgt_2
     if use_lagr:
         regret2 = torch.square(regret)
-        return regret.sum(-1).sum(-1).mean()/p.shape[1],regret2.sum(-1).sum(-1).mean()/p.shape[1]
+        return regret.sum(-1).sum(-1).mean(),regret2.sum(-1).sum(-1).mean()
     else:
-        return regret.sum(-1).sum(-1).mean()/p.shape[1]
+        return regret.sum(-1).sum(-1).mean()
 
 # IR Violation
 def compute_ir(r, p, q):
@@ -174,10 +175,11 @@ def compute_ic_FOSD(model, G, r, p, q, r_mult = 1, lagr_mult = None, use_lagr = 
 def eval_model(model, G, P, Q, rtn = False, include_truncation = False):
     num_agents = G.cfg.num_agents
     device = G.cfg.device
+    st_zero_one = G.cfg.st_zero_one
     p,q = torch.Tensor(P).to(device),torch.Tensor(Q).to(device)
     r = model(p,q)
     ic_loss = compute_ic_FOSD(model,G,r,p,q,use_lagr=False,include_truncation=include_truncation)
-    st_loss = compute_st(r,p,q)
+    st_loss = compute_st(r,p,q,zero_one=st_zero_one)
     ir_loss = compute_ir(r,p,q)
 
     print(f"ic_loss: {ic_loss:.10f}, st_loss: {st_loss:.10f}, ir_loss: {ir_loss:.10f}")
@@ -194,6 +196,8 @@ def train_net(cfg, G, model, include_truncation = None):
     # # Logger
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
+
+    num_agents = cfg.num_agents
 
     if not logger.hasHandlers():
         handler = logging.StreamHandler()
@@ -231,7 +235,7 @@ def train_net(cfg, G, model, include_truncation = None):
 
         # Compute loss
         if cfg.use_lagr == "s":
-            st_loss,st_loss2 = compute_st(r, p, q, use_lagr=True)
+            st_loss,st_loss2 = compute_st(r, p, q, use_lagr=True, zero_one=cfg.st_zero_one)
             ic_loss = compute_ic_FOSD(model, G, r, p, q, include_truncation = include_truncation)
             total_loss = st_loss + st_loss2 + ic_loss
 
@@ -240,9 +244,9 @@ def train_net(cfg, G, model, include_truncation = None):
                 logger.info("[lambda]: %f"%(lagr_mult))
 
         elif cfg.use_lagr == "r":
-            st_loss = compute_st(r,p,q)
+            st_loss = compute_st(r,p,q,zero_one=cfg.st_zero_one)
             ic_loss, ic_loss2, ic_losses = compute_ic_FOSD(model, G, r, p, q, lagr_mult=lagr_mult, use_lagr=True, include_truncation = include_truncation)
-            total_loss = st_loss + ic_loss/(2*num_agents) + ic_loss2/(2*num_agents)
+            total_loss = st_loss + ic_loss + ic_loss2
             total_loss.backward(retain_graph = True)
 
             if (i>0) and (i % cfg.lagr_iter == 0):
@@ -250,7 +254,7 @@ def train_net(cfg, G, model, include_truncation = None):
                 logger.info(f"[lambda]: {lagr_mult.tolist()}")
 
         else:
-            st_loss = compute_st(r,p,q)
+            st_loss = compute_st(r,p,q,zero_one=st_zero_one)
             ic_loss = compute_ic_FOSD(model, G, r, p, q, include_truncation = include_truncation)
 
             total_loss = st_loss * (cfg.lambd) + ic_loss * (1 - cfg.lambd)
@@ -278,7 +282,7 @@ def train_net(cfg, G, model, include_truncation = None):
                     P, Q = G.generate_batch(cfg.batch_size)
                     p, q = torch.Tensor(P).to(cfg.device), torch.Tensor(Q).to(cfg.device)
                     r = model(p, q)
-                    st_loss = compute_st(r, p, q)
+                    st_loss = compute_st(r, p, q, zero_one=cfg.st_zero_one)
                     ic_loss = compute_ic_FOSD(model, G, r, p, q, include_truncation = include_truncation)
 
                     val_st_loss += st_loss.item()
