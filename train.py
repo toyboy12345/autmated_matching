@@ -122,7 +122,7 @@ def compute_ir(r, p, q):
     return ir.sum(-1).sum(-1).mean()/p.shape[1]
 
 # FOSD Violation
-def compute_ic_FOSD(model, G, r, p, q, r_mult = 1, lagr_mult = None, use_lagr = False, include_truncation = None):
+def compute_ic_FOSD(model, G, r, p, q, r_mult = 1, lagr_mult = None, use_lagr = False, include_truncation = False):
     cfg = G.cfg
     num_agents = cfg.num_agents
     device = cfg.device
