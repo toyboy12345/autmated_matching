@@ -271,7 +271,7 @@ def train_net(cfg, G, model, include_truncation = None):
             logger.info("[Stability-Viol]: %f, [IC-Viol]: %f"%(st_loss.item(), ic_loss.item()))
 
         if (i>0) and (i % cfg.save_iter == 0) or i == cfg.epochs - 1:
-            torch.save(model, "/content/drive/MyDrive/神取ゼミ/2023A/groupB/data/model/model_tmp.pth")
+            torch.save(model, "deep-matching/models/model_tmp.pth")
 
         if ((i>0) and (i% cfg.val_iter == 0)) or i == cfg.epochs - 1:
             model.eval()
