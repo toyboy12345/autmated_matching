@@ -171,6 +171,22 @@ def compute_ic_FOSD(model, G, r, p, q, r_mult = 1, lagr_mult = None, use_lagr = 
     else:
         IC_viol = ic_viol.mean()
         return IC_viol
+        
+def compute_anonimity_violation(model,G,r,p,q):
+    av_P = torch.zeros(3)
+    av_Q = torch.zeros(3)
+    for i in range(2):
+        for j in range(i+1,3):
+            idx = [0,1,2]
+            idx[i],idx[j] = idx[j],idx[i]
+            p_P,q_P = p[:,idx,:],q[:,idx,:]
+            p_Q,q_Q = p[:,:,idx],q[:,:,idx]
+            r_P = model(p_P,q_P)
+            r_Q = model(p_Q,q_Q)
+            av_P[i+j-1] = torch.sum(torch.abs(r-r_P[:,idx,:]))
+            av_Q[i+j-1] = torch.sum(torch.abs(r-r_Q[:,:,idx]))
+    av = torch.cat((av_P,av_Q))
+    return av
 
 def eval_model(model, G, P, Q, rtn = False, include_truncation = False):
     num_agents = G.cfg.num_agents
