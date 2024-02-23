@@ -19,7 +19,7 @@ class HParams:
                  batch_size = 1024, num_hidden_layers = 4, num_hidden_nodes = 256, lr = 5e-3, epochs = 50000,
                  print_iter = 100, val_iter = 1000, num_val_batches = 200,
                  prob = 0.5, lambd = 0.1, corr = 0, seed = 0, device = "cuda:0",
-                 use_lagr = None, lagr_mult = None, lagr_iter = None, rho = None, st_zero_one = False):
+                 use_lagr = None, lagr_mult = None, lagr_iter = None, rho = None, st_zero_one = False, anonymity_vio = False):
         self.num_agents = num_agents
         self.batch_size = batch_size
         self.num_hidden_layers = 4
@@ -48,51 +48,101 @@ class HParams:
         self.rho = rho
         self.st_zero_one = st_zero_one
 
-def algo(p_,q_):
-    p,q = 4-p_*3,4-q_*3
-    r = np.zeros((3,3))
-    for i in range(3):
-        for j in range(3):
-            if p[i,j] == 1 and q[i,j] == 1:
-                r[i,j] = 1
-                i1,j1 = i,j
-                break
+        self.anonymity_vio = anonymity_vio
 
-    p1,q1 = p[np.delete(np.arange(3),i1),:][:,np.delete(np.arange(3),j1)],q[np.delete(np.arange(3),i1),:][:,np.delete(np.arange(3),j1)]
-    p1,q1 = np.argsort(p1)+1,np.argsort(q1,0)+1
-    for i in range(2):
-        for j in range(2):
-            if p1[i,j] == 1 and q1[i,j] == 1:
-                i2,j2 = i+int(bool(i1+i1*(1-i) <= 1)), j+int(bool(j1+j1*(1-j) <= 1))
-                i3,j3 = 1-i+int(bool(i1+i1*i <= 1)), 1-j+int(bool(j1+j1*j <= 1))
+def algo(p,q):
+    device = p.device
+    # 自分のこと好きな人リスト
+    faved_p,faved_q = [torch.where(q[i,:]==1)[0].tolist() for i in range(3)],[torch.where(p[:,i]==1)[0].tolist() for i in range(3)]
 
-                r[i2,j2] = 1
-                r[i3,j3] = 1
-                return r
-    i2,j2 = np.delete(np.arange(3),i1)[0],np.delete(np.arange(3),j1)[1]
-    i3,j3 = np.delete(np.arange(3),i1)[1],np.delete(np.arange(3),j1)[0]
+    # 自分のこと一番好きな人の中で一番好きな人よりも好きな人リスト
+    fav_p = torch.Tensor([[1,1,1] if len(p[i,faved_p[i]])==0 else torch.where(p[i,:] >= torch.max(p[i,faved_p[i]]),1,0).tolist() for i in range(3)]).to(device)
+    fav_q = torch.Tensor([[1,1,1] if len(q[faved_q[i],i])==0 else torch.where(q[:,i] >= torch.max(q[faved_q[i],i]),1,0).tolist() for i in range(3)]).to(device).transpose(1,0)
 
-    r[i2,j2] = 1
-    r[i3,j3] = 1
+    avl = torch.where(fav_p+fav_q == 2,1,0)
+
+    nummin = torch.Tensor([[torch.min(torch.sum(avl[:,i]),torch.sum(avl[j,:])) if avl[j,i] else 4 for i in range(3)] for j in range(3)]).to(device)
+
+    r = torch.zeros((3,3),device=device)
+    idx,idy = np.arange(3),np.arange(3)
+    if torch.min(nummin) == 1:
+        for x,y in zip(torch.where(nummin==1)[0],torch.where(nummin==1)[1]):
+            r[x,y] = 1
+        idx,idy = np.delete(idx,torch.where(nummin==1)[0]),np.delete(idy,torch.where(nummin==1)[1])
+        if len(idx) == 1:
+            r[idx[0],idy[0]] = 1
+        elif len(idx) == 2:
+            p_,q_ = torch.argsort(p[idx,:][:,idy],1),torch.argsort(q[idx,:][:,idy],0)
+            # 自分のこと好きな人リスト
+            faved_p_,faved_q_ = [torch.where(q_[i,:]==1)[0].tolist() for i in range(2)],[torch.where(p_[:,i]==1)[0].tolist() for i in range(2)]
+
+            # 自分のこと一番好きな人の中で一番好きな人よりも好きな人リスト
+            fav_p_ = torch.Tensor([[1,1] if len(p_[i,faved_p_[i]])==0 else torch.where(p_[i,:] >= torch.max(p_[i,faved_p_[i]]),1,0).tolist() for i in range(2)]).to(device)
+            fav_q_ = torch.Tensor([[1,1] if len(q_[faved_q_[i],i])==0 else torch.where(q_[:,i] >= torch.max(q_[faved_q_[i],i]),1,0).tolist() for i in range(2)]).to(device).transpose(1,0)
+
+            avl_ = torch.where(fav_p_+fav_q_ == 2,1,0)
+
+            nummin_ = torch.Tensor([[torch.min(torch.sum(avl_[:,i]),torch.sum(avl_[j,:])) if avl_[j,i] else 3 for i in range(2)] for j in range(2)]).to(device)
+            if torch.min(nummin_) == 1:
+                for x,y in zip(torch.where(nummin_==1)[0],torch.where(nummin_==1)[1]):
+                    r[idx[x],idy[y]] = 1
+            else:
+                for x in idx:
+                    for y in idy:
+                        r[x,y] = 1/2
+
+
+    elif torch.min(nummin) == 2:
+        idx_cnt,idy_cnt = np.array([0]*3),np.array([0]*3)
+        for x,y in zip(torch.where(nummin==2)[0],torch.where(nummin==2)[1]):
+            r[x,y] = 1/2
+            idx_cnt[x] += 1
+            idy_cnt[y] += 1
+        idx,idy = np.delete(idx,np.where(idx_cnt==2)),np.delete(idy,np.where(idy_cnt==2))
+        if len(idx) == 2:
+            p_,q_ = torch.argsort(p[idx,:][:,idy],1),torch.argsort(q[idx,:][:,idy],0)
+            # 自分のこと好きな人リスト
+            faved_p_,faved_q_ = [torch.where(q_[i,:]==1)[0].tolist() for i in range(2)],[torch.where(p_[:,i]==1)[0].tolist() for i in range(2)]
+
+            # 自分のこと一番好きな人の中で一番好きな人よりも好きな人リスト
+            fav_p_ = torch.Tensor([[1,1] if len(p_[i,faved_p_[i]])==0 else torch.where(p_[i,:] >= torch.max(p_[i,faved_p_[i]]),1,0).tolist() for i in range(2)]).to(device)
+            fav_q_ = torch.Tensor([[1,1] if len(q_[faved_q_[i],i])==0 else torch.where(q_[:,i] >= torch.max(q_[faved_q_[i],i]),1,0).tolist() for i in range(2)]).to(device).transpose(1,0)
+
+            avl_ = torch.where(fav_p_+fav_q_ == 2,1,0)
+
+            nummin_ = torch.Tensor([[torch.min(torch.sum(avl_[:,i]),torch.sum(avl_[j,:])) if avl_[j,i] else 3 for i in range(2)] for j in range(2)]).to(device)
+            if torch.min(nummin_) == 1:
+                for x,y in zip(torch.where(nummin_==1)[0],torch.where(nummin_==1)[1]):
+                    r[idx[x],idy[y]] = 1/2
+            else:
+                for x in idx:
+                    for y in idy:
+                        r[x,y] = 1/4
+
+    else:
+        r += 1/3
+
     return r
 
+def algo_batch(p,q):
+    return torch.Tensor(np.array(list((map(algo,p,q))))).to(p.device)
 
-def algo_batch(p,q,model):
-    P,Q = p.to('cpu').detach().numpy().copy(),q.to('cpu').detach().numpy().copy()
-    bacth_size = p.shape[0]
-    r = torch.zeros(p.shape,device="cuda:0")
-    idx = torch.where(torch.max(torch.max(p*q,1).values,1).values == 1, 1, 0)
-    idx_ = idx*(-1)+1
-
-    if torch.sum(idx) >= 1:
-        r1 = torch.Tensor(np.array(list((map(algo,P[idx.to(bool).to('cpu').detach().numpy()],Q[idx.to(bool).to('cpu').detach().numpy()]))))).to("cuda:0")
-        r[idx.to(bool)] = r1
-
-    if torch.sum(idx_) >= 1:
-        r2 = model(p[idx_.to(bool)],q[idx_.to(bool)]).to("cuda:0")
-        r[(idx*(-1)+1).to(bool)] = r2
-
-    return torch.reshape(r,(-1,3,3))
+def algo2_batch(p,q):
+    return torch.Tensor(np.array(list((map(algo2,p,q))))).to(p.device)
+    
+def algo2(p,q):
+    r = torch.zeros((3,3),device=p.device)
+    for x1 in range(2):
+        for x2 in range(x1+1,3):
+            for y1 in range(2):
+                for y2 in range(y1+1,3):
+                    p_,q_ = torch.argsort(p[:,[x1,x2]][[y1,y2],:],dim=1),torch.argsort(q[:,[x1,x2]][[y1,y2],:],dim=0)
+                    r_ = algo_mini(p_,q_)
+                    for i,x in enumerate([x1,x2]):
+                        for j,y in enumerate([y1,y2]):
+                            r[y,x] += r_[j,i]
+    r = r/6 
+    return r
 
 # Stability Violation
 def compute_st(r, p, q, use_lagr = False, zero_one = False):
@@ -122,7 +172,7 @@ def compute_ir(r, p, q):
     return ir.sum(-1).sum(-1).mean()/p.shape[1]
 
 # FOSD Violation
-def compute_ic_FOSD(model, G, r, p, q, r_mult = 1, lagr_mult = None, use_lagr = False, include_truncation = None):
+def compute_ic_FOSD(model, G, r, p, q, r_mult = 1, include_truncation = False):
     cfg = G.cfg
     num_agents = cfg.num_agents
     device = cfg.device
@@ -162,15 +212,23 @@ def compute_ic_FOSD(model, G, r, p, q, r_mult = 1, lagr_mult = None, use_lagr = 
     
     ic_viol = torch.cat((IC_viol_P,IC_viol_Q))
 
-    if use_lagr:
-        lagr_mult = torch.Tensor(lagr_mult).to(device)
-        IC_viol = torch.dot(lagr_mult,ic_viol)
-        IC_viol2 = torch.sum(torch.square(ic_viol))*0.5*cfg.rho
-        return IC_viol, IC_viol2, ic_viol
-
-    else:
-        IC_viol = ic_viol.mean()
-        return IC_viol
+    return ic_viol
+        
+def compute_anonimity_violation(model,G,r,p,q):
+    av_P = torch.zeros(3,device=G.cfg.device)
+    av_Q = torch.zeros(3,device=G.cfg.device)
+    for i in range(2):
+        for j in range(i+1,3):
+            idx = [0,1,2]
+            idx[i],idx[j] = idx[j],idx[i]
+            p_P,q_P = p[:,idx,:],q[:,idx,:]
+            p_Q,q_Q = p[:,:,idx],q[:,:,idx]
+            r_P = model(p_P,q_P)
+            r_Q = model(p_Q,q_Q)
+            av_P[i+j-1] = torch.sum(torch.abs(r-r_P[:,idx,:]))
+            av_Q[i+j-1] = torch.sum(torch.abs(r-r_Q[:,:,idx]))
+    av = torch.cat((av_P,av_Q))
+    return av
 
 def eval_model(model, G, P, Q, rtn = False, include_truncation = False):
     num_agents = G.cfg.num_agents
@@ -245,17 +303,25 @@ def train_net(cfg, G, model, include_truncation = None):
 
         elif cfg.use_lagr == "r":
             st_loss = compute_st(r,p,q,zero_one=cfg.st_zero_one)
-            ic_loss, ic_loss2, ic_losses = compute_ic_FOSD(model, G, r, p, q, lagr_mult=lagr_mult, use_lagr=True, include_truncation = include_truncation)
-            total_loss = st_loss + ic_loss + ic_loss2
+            ic_loss = compute_ic_FOSD(model, G, r, p, q, include_truncation = include_truncation)
+            anon_vio = compute_anonimity_violation(model,G,r,p,q)
+            if cfg.anonymity_vio:
+                loss = torch.cat((ic_loss,anon_vio))
+                total_loss = st_loss + torch.dot(torch.Tensor(lagr_mult).to(cfg.device),loss) + torch.sum(torch.square(loss))*cfg.rho
+            else:
+                total_loss = st_loss + torch.dot(torch.Tensor(lagr_mult).to(cfg.device),ic_loss) + torch.sum(torch.square(ic_loss))*cfg.rho
             total_loss.backward(retain_graph = True)
 
             if (i>0) and (i % cfg.lagr_iter == 0):
-                lagr_mult = lagr_mult + ic_losses.to('cpu').detach().numpy().copy() * cfg.rho
+                if cfg.anonymity_vio:
+                    lagr_mult = lagr_mult + loss.to('cpu').detach().numpy().copy() * cfg.rho
+                else:
+                    lagr_mult = lagr_mult + ic_loss.to('cpu').detach().numpy().copy() * cfg.rho
                 logger.info(f"[lambda]: {lagr_mult.tolist()}")
 
         else:
             st_loss = compute_st(r,p,q,zero_one=st_zero_one)
-            ic_loss = compute_ic_FOSD(model, G, r, p, q, include_truncation = include_truncation)
+            ic_loss = torch.sum(compute_ic_FOSD(model, G, r, p, q, include_truncation = include_truncation))
 
             total_loss = st_loss * (cfg.lambd) + ic_loss * (1 - cfg.lambd)
             total_loss.backward()
@@ -268,7 +334,7 @@ def train_net(cfg, G, model, include_truncation = None):
         # Validation
         if i% cfg.print_iter == 0 or i == cfg.epochs - 1:
             logger.info("[TRAIN-ITER]: %d, [Time-Elapsed]: %f, [Total-Loss]: %f"%(i, t_elapsed, total_loss.item()))
-            logger.info("[Stability-Viol]: %f, [IC-Viol]: %f"%(st_loss.item(), ic_loss.item()))
+            logger.info("[Stability-Viol]: %f, [IC-Viol]: %f, [ANON-Viol]: %f"%(st_loss.item(), torch.sum(ic_loss).item(), torch.sum(anon_vio).item()))
 
         if (i>0) and (i % cfg.save_iter == 0) or i == cfg.epochs - 1:
             torch.save(model, "deep-matching/models/model_tmp.pth")
@@ -278,15 +344,17 @@ def train_net(cfg, G, model, include_truncation = None):
             with torch.no_grad():
                 val_st_loss = 0.0
                 val_ic_loss = 0.0
+                val_anon_loss = 0.0
                 for j in range(cfg.num_val_batches):
                     P, Q = G.generate_batch(cfg.batch_size)
                     p, q = torch.Tensor(P).to(cfg.device), torch.Tensor(Q).to(cfg.device)
                     r = model(p, q)
                     st_loss = compute_st(r, p, q, zero_one=cfg.st_zero_one)
-                    ic_loss = compute_ic_FOSD(model, G, r, p, q, include_truncation = include_truncation)
-
+                    ic_loss = torch.sum(compute_ic_FOSD(model, G, r, p, q, include_truncation = include_truncation))
+                    anon_vio = torch.sum(compute_anonimity_violation(model,G,r,p,q))
                     val_st_loss += st_loss.item()
                     val_ic_loss += ic_loss.item()
-                logger.info("\t[VAL-ITER]: %d, [ST-Loss]: %f, [IC-Loss]: %f"%(i, val_st_loss/cfg.num_val_batches, val_ic_loss/cfg.num_val_batches))
+                    val_anon_loss += anon_vio.item()
+                logger.info("\t[VAL-ITER]: %d, [ST-Loss]: %f, [IC-Loss]: %f, [ANON-Loss]: %f"%(i, val_st_loss/cfg.num_val_batches, val_ic_loss/cfg.num_val_batches, val_anon_loss/cfg.num_val_batches))
 
         i += 1
