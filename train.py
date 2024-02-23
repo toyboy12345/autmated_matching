@@ -125,10 +125,10 @@ def algo(p,q):
     return r
 
 def algo_batch(p,q):
-    return torch.Tensor(np.array(list((map(algo,p,q))))).to(p.device)
+    return return torch.stack(list((map(algo,p,q))),dim=0).to(p.device)
 
 def algo2_batch(p,q):
-    return torch.Tensor(np.array(list((map(algo2,p,q))))).to(p.device)
+    return return torch.stack(list((map(algo2,p,q))),dim=0).to(p.device)
 
 def algo2(p,q):
     r = torch.zeros((3,3),device=p.device)
@@ -154,7 +154,7 @@ def algo_mini(p,q):
     else:
         r += 1/2
     return r
-    
+
 # Stability Violation
 def compute_st(r, p, q, use_lagr = False, zero_one = False):
     if not zero_one: 
