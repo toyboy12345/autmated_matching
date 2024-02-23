@@ -125,10 +125,10 @@ def algo(p,q):
     return r
 
 def algo_batch(p,q):
-    return return torch.stack(list((map(algo,p,q))),dim=0).to(p.device)
+    return torch.stack(list((map(algo,p,q))),dim=0).to(p.device)
 
 def algo2_batch(p,q):
-    return return torch.stack(list((map(algo2,p,q))),dim=0).to(p.device)
+    return torch.stack(list((map(algo2,p,q))),dim=0).to(p.device)
 
 def algo2(p,q):
     r = torch.zeros((3,3),device=p.device)
