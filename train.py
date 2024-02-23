@@ -129,7 +129,7 @@ def algo_batch(p,q):
 
 def algo2_batch(p,q):
     return torch.Tensor(np.array(list((map(algo2,p,q))))).to(p.device)
-    
+
 def algo2(p,q):
     r = torch.zeros((3,3),device=p.device)
     for x1 in range(2):
@@ -144,6 +144,17 @@ def algo2(p,q):
     r = r/6 
     return r
 
+def algo_mini(p,q):
+    r = torch.zeros((2,2),device=p.device)
+    if torch.max(p*q) == 1:
+        i1,j1 = torch.where(p*q == 1)[0][0].item(),torch.where(p*q == 1)[1][0].item()
+        i2,j2 = 1-i1,1-j1
+        r[i1,j1] += 1
+        r[i2,j2] += 1
+    else:
+        r += 1/2
+    return r
+    
 # Stability Violation
 def compute_st(r, p, q, use_lagr = False, zero_one = False):
     if not zero_one: 
