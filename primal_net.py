@@ -35,7 +35,7 @@ class PrimalNet(nn.Module):
 
 
         # Output Layer
-        self.layer_out = nn.Linear(num_hidden_nodes, 2 * num_agents * num_agents)
+        self.layer_out = nn.Linear(num_hidden_nodes, num_agents * num_agents)
 
 
     def forward(self, p, q):
@@ -43,14 +43,9 @@ class PrimalNet(nn.Module):
         x = x.view(-1, self.cfg.num_agents * self.cfg.num_agents * 2)
         x = self.input_block(x)
 
-        x = self.layer_out(x)
-        r,t = x[:,:self.cfg.num_agents * self.cfg.num_agents],x[:,self.cfg.num_agents * self.cfg.num_agents:]
+        r = self.layer_out(x)
         r = r.view(-1, self.cfg.num_agents, self.cfg.num_agents)
         r = F.softplus(r)
         r = F.normalize(r, p = 1, dim = 1, eps=1e-8)
 
-        t = t.view(-1, self.cfg.num_agents, self.cfg.num_agents)
-        t = F.softplus(t)
-        t = F.normalize(t, p = 1, dim = 1, eps=1e-8)
-
-        return r,t
+        return r

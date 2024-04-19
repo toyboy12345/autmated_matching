@@ -3,6 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 import numpy as np
 from itertools import permutations
+from data import Data
 
 def pref_to_num(p_agent):
     p_agent = p_agent*3
