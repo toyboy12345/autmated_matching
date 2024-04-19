@@ -8,7 +8,7 @@ from data import Data
 def pref_to_num(p_agent):
     p_agent = p_agent*3
     num_agents = p_agent.shape[-1]
-    all_prefs = torch.Tensor(np.array(list(permutations(np.arange(num_agents))))+1).to(device)
+    all_prefs = torch.Tensor(np.array(list(permutations(np.arange(num_agents))))+1).to(p_agent.device)
     all_prefs = all_prefs.repeat((1,p_agent.shape[0])).view(-1,p_agent.shape[0],num_agents)
     
     return torch.where((all_prefs==p_agent).all(axis=2))[0]
@@ -78,7 +78,7 @@ def compute_vloss(cfg, model, v, p, q):
 
         v_agent = v[:,agent_idx,:,:]
 
-        v_mis_agent = v_mis[torch.arange(q.shape[0]),pref_to_num(q[:,agent_idx,:])]
+        v_mis_agent = v_mis[torch.arange(q.shape[0]),pref_to_num(q[:,:,agent_idx])]
 
         for w in range(num_agents):
             mask = torch.where(q[:,:,agent_idx]<=q[:,w,agent_idx].view(-1,1),1,0).repeat((1,v_agent.shape[1])).view(v_agent.shape[0],v_agent.shape[1],v_agent.shape[2])
