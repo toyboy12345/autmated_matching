@@ -2,6 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import numpy as np
+from data import Data
 
 def compute_stv(r, t, p, q):
     wp = torch.where(p[:, :, None, :] - p[:, :, :, None]>0,1,0).to(torch.float)
@@ -12,6 +13,7 @@ def compute_stv(r, t, p, q):
 def compute_spv_w(cfg, model, r, p, q):
     num_agents = cfg.num_agents
     device = cfg.device
+    G = Data(cfg)
 
     P,Q = p.to('cpu').detach().numpy().copy(),q.to('cpu').detach().numpy().copy()
     spv_w = torch.zeros((num_agents,num_agents)).to(device)
@@ -35,6 +37,7 @@ def compute_spv_w(cfg, model, r, p, q):
 def compute_spv_f(cfg, model, r, p, q):
     num_agents = cfg.num_agents
     device = cfg.device
+    G = Data(cfg)
 
     P,Q = p.to('cpu').detach().numpy().copy(),q.to('cpu').detach().numpy().copy()
     spv_f = torch.zeros((num_agents,num_agents)).to(device)

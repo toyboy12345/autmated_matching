@@ -43,11 +43,11 @@ class HParams:
         self.lagr_iter = lagr_iter
 
 def train_primal(cfg, G, model, include_truncation = False):
-    # File names
-    root_dir = os.path.join("experiments", "agents_%d"%(cfg.num_agents), "corr_%.2f"%(cfg.corr))
-    log_fname = os.path.join(root_dir, "LOG_%d_lambd_%f_prob_%.2f_corr_%.2f.txt"%(cfg.seed, cfg.lambd, cfg.prob, cfg.corr))
-    model_path = os.path.join(root_dir, "MODEL_%d_lambd_%f_prob_%.2f_corr_%.2f"%(cfg.seed, cfg.lambd, cfg.prob, cfg.corr))
-    os.makedirs(root_dir, exist_ok=True)
+    # # File names
+    # root_dir = os.path.join("experiments", "agents_%d"%(cfg.num_agents), "corr_%.2f"%(cfg.corr))
+    # log_fname = os.path.join(root_dir, "LOG_%d_lambd_%f_prob_%.2f_corr_%.2f.txt"%(cfg.seed, cfg.lambd, cfg.prob, cfg.corr))
+    # model_path = os.path.join(root_dir, "MODEL_%d_lambd_%f_prob_%.2f_corr_%.2f"%(cfg.seed, cfg.lambd, cfg.prob, cfg.corr))
+    # os.makedirs(root_dir, exist_ok=True)
 
     # # Logger
     logger = logging.getLogger()
@@ -89,7 +89,7 @@ def train_primal(cfg, G, model, include_truncation = False):
         p, q = torch.Tensor(P).to(cfg.device), torch.Tensor(Q).to(cfg.device)
         r,t = model(p, q)
 
-        loss,constr_vio = compute_loss(cfg,model,r,t,p,q,lambd,cfg.rho)
+        loss,constr_vio = compute_loss(cfg,model,r,t,p,q,torch.Tensor(lambd).to(cfg.device),cfg.rho)
         if (i>0) and (i%cfg.lagr_iter == 0):
             lambd += cfg.rho*constr_vio.item()
             print(lambd)
@@ -118,7 +118,7 @@ def train_primal(cfg, G, model, include_truncation = False):
                     P, Q = G.generate_batch(cfg.batch_size)
                     p, q = torch.Tensor(P).to(cfg.device), torch.Tensor(Q).to(cfg.device)
                     r,t = model(p, q)
-                    loss,constr_vio = compute_loss(cfg,model,r,t,p,q,lambd,cfg.rho)
+                    loss,constr_vio = compute_loss(cfg,model,r,t,p,q,torch.Tensor(lambd).to(cfg.device),cfg.rho)
                     val_loss += loss.item()
                     val_constr_vio += constr_vio.item()
                 logger.info("\t[VAL-ITER]: %d, [LOSS]: %f, [Constr-vio]: %f"%(i, val_loss/cfg.num_val_batches, val_constr_vio/cfg.num_val_batches))
