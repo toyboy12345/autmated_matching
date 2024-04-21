@@ -93,6 +93,7 @@ def train_primal(cfg, G, model, include_truncation = False):
         if (i>0) and (i%cfg.lagr_iter == 0):
             lambd += cfg.rho*constr_vio.to('cpu').detach().numpy().copy()
             print(lambd)
+            cfg.lambd = lambd
         
         loss.backward(retain_graph=True)
 

@@ -91,8 +91,9 @@ def train_dual(cfg, G, model, include_truncation = False):
 
         loss,constr_vio,obj = compute_loss(cfg,model,x,y,z,u,v,p,q,torch.Tensor(lambd).to(cfg.device),cfg.rho)
         if (i>0) and (i%cfg.lagr_iter == 0):
-            lambd += cfg.rho*constr_vio.item()
+            lambd += cfg.rho*constr_vio.to('cpu').detach().numpy().copy()
             print(lambd)
+            cfg.lambd = lambd
         
         loss.backward(retain_graph=True)
 
@@ -104,7 +105,7 @@ def train_dual(cfg, G, model, include_truncation = False):
         # Validation
         if i% cfg.print_iter == 0 or i == cfg.epochs - 1:
             logger.info("[TRAIN-ITER]: %d, [Time-Elapsed]: %f, [Total-Loss]: %f"%(i, t_elapsed, loss.item()))
-            logger.info("[CONSTR-Vio]: %f, [OBJECTIVE]: %f"%(constr_vio.item(),obj.item()))
+            logger.info("[CONSTR-Vio]: %f, [OBJECTIVE]: %f"%(constr_vio.sum().item(),obj.item()))
 
         if (i>0) and (i % cfg.save_iter == 0) or i == cfg.epochs - 1:
             torch.save(model, "deep-matching/models/dual/model_tmp.pth")
@@ -121,7 +122,7 @@ def train_dual(cfg, G, model, include_truncation = False):
                     r,t = model(p, q)
                     loss,constr_vio,obj = compute_loss(cfg,model,x,y,z,u,v,p,q,torch.Tensor(lambd).to(cfg.device),cfg.rho)
                     val_loss += loss.item()
-                    val_constr_vio += constr_vio.item()
+                    val_constr_vio += constr_vio.sum().item()
                     val_obj += obj.item()
                 logger.info("\t[VAL-ITER]: %d, [LOSS]: %f, [Constr-vio]: %f, [Objective]: %f"%(i, val_loss/cfg.num_val_batches, val_constr_vio/cfg.num_val_batches, val_obj/cfg.num_val_batches))
 
