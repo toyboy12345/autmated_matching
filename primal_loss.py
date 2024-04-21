@@ -42,7 +42,7 @@ def compute_spv_f(cfg, model, r, p, q):
     P,Q = p.to('cpu').detach().numpy().copy(),q.to('cpu').detach().numpy().copy()
     spv_f = torch.zeros((num_agents,num_agents)).to(device)
     for agent_idx in range(num_agents):
-        P_mis, Q_mis = G.generate_all_misreports(P, Q, agent_idx = agent_idx, is_P = True, include_truncation = False)
+        P_mis, Q_mis = G.generate_all_misreports(P, Q, agent_idx = agent_idx, is_P = False, include_truncation = False)
         p_mis, q_mis = torch.Tensor(P_mis).to(device), torch.Tensor(Q_mis).to(device)
         r_mis = model(p_mis.view(-1, num_agents, num_agents), q_mis.view(-1, num_agents, num_agents))
         r_mis = r_mis.view(p.shape[0],-1,num_agents,num_agents)
