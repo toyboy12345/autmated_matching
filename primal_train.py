@@ -123,6 +123,6 @@ def train_primal(cfg, G, model, include_truncation = False):
                     val_loss += loss.item()
                     val_constr_vio += constr_vio.item()
                     val_obj += obj.item()
-                logger.info("\t[VAL-ITER]: %d, [LOSS]: %f, [Constr-vio]: %f, [Objective]: %f"%(i, val_loss/cfg.num_val_batches, val_constr_vio/cfg.num_val_batches, val_obj/num_val_batches))
+                logger.info("\t[VAL-ITER]: %d, [LOSS]: %f, [Constr-vio]: %f, [Objective]: %f"%(i, val_loss/cfg.num_val_batches, val_constr_vio/cfg.num_val_batches, val_obj/cfg.num_val_batches))
 
         i += 1
