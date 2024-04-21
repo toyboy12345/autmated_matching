@@ -78,6 +78,7 @@ def train_dual(cfg, G, model, include_truncation = False):
 
     lambd = cfg.lambd
 
+
     while i < cfg.epochs:
 
         # Reset opt
@@ -89,7 +90,7 @@ def train_dual(cfg, G, model, include_truncation = False):
         p, q = torch.Tensor(P).to(cfg.device), torch.Tensor(Q).to(cfg.device)
         x,y,z,u,v = model(p, q)
 
-        loss,constr_vio,obj = compute_loss(cfg,model,x,y,z,u,v,p,q,torch.Tensor(lambd).to(cfg.device),cfg.rho)
+        loss,constr_vio,obj = compute_loss(cfg,model,x,y,z,u,v,p,q,lambd,cfg.rho)
         if (i>0) and (i%cfg.lagr_iter == 0):
             lambd += cfg.rho*constr_vio.to('cpu').detach().numpy().copy()
             print(lambd)
@@ -120,7 +121,7 @@ def train_dual(cfg, G, model, include_truncation = False):
                     P, Q = G.generate_batch(cfg.batch_size)
                     p, q = torch.Tensor(P).to(cfg.device), torch.Tensor(Q).to(cfg.device)
                     r,t = model(p, q)
-                    loss,constr_vio,obj = compute_loss(cfg,model,x,y,z,u,v,p,q,torch.Tensor(lambd).to(cfg.device),cfg.rho)
+                    loss,constr_vio,obj = compute_loss(cfg,model,x,y,z,u,v,p,q,lambd,cfg.rho)
                     val_loss += loss.item()
                     val_constr_vio += constr_vio.sum().item()
                     val_obj += obj.item()

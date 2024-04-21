@@ -55,8 +55,7 @@ class DualNet(nn.Module):
 
         z,a = (a[:,:self.num_agents*self.num_agents]).view(-1,self.num_agents*self.num_agents),a[:,self.num_agents*self.num_agents:]
         z = z.view(-1, self.cfg.num_agents, self.cfg.num_agents)
-        z = F.softplus(z)
-        z = F.normalize(z, p = 1, dim = 1, eps=1e-8)
+        z = F.sigmoid(z)
 
         facto = math.factorial(self.num_agents)
         u,a = a[:,:facto*self.num_agents*self.num_agents], a[:,facto*self.num_agents*self.num_agents:]

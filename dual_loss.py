@@ -22,7 +22,7 @@ def compute_yloss(y):
 def compute_zloss(z,p,q):
     wp = torch.where(p[:, :, None, :] - p[:, :, :, None]<0,1,0).to(torch.float)
     wq = torch.where(q[:, :, None, :] - q[:, None, :, :]<0,1,0).to(torch.float)
-    zloss = F.relu(z + torch.einsum('bjc,bijc->bic', z, wq) + torch.einsum('bia,biac->bic', z, wp))
+    zloss = z + torch.einsum('bjc,bijc->bic', z, wq) + torch.einsum('bia,biac->bic', z, wp)
     return zloss.mean(0)
 
 def compute_uloss(cfg, model, u ,p, q):
@@ -103,6 +103,7 @@ def compute_constraint_vio(cfg, model, x, y, z, u, v, p, q):
     return total_constraints
 
 def compute_loss(cfg, model, x, y, z, u, v, p, q, lambd, rho):
+    lambd = torch.Tensor(lambd).to(cfg.device)
     obj = x.sum(-1).mean() + y.sum(-1).mean() - z.sum(-1).sum(-1).mean()
     constr_vio = compute_constraint_vio(cfg,model,x,y,z,u,v,p,q)
     return obj + (constr_vio*lambd).sum() + 0.5*rho*constr_vio.square().sum(), constr_vio, obj
