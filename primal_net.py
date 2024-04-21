@@ -46,6 +46,6 @@ class PrimalNet(nn.Module):
         r = self.layer_out(x)
         r = r.view(-1, self.cfg.num_agents, self.cfg.num_agents)
         r = F.softplus(r)
-        r = F.normalize(r, p = 1, dim = 1, eps=1e-8)
+        r = F.normalize(F.normalize(r, p = 1, dim = 1, eps=1e-8), p = 1, dim = 2, eps = 1e-8)
 
         return r

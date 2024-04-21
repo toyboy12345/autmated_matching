@@ -8,7 +8,7 @@ def compute_t(r, p, q):
     wp = torch.where(p[:, :, None, :] - p[:, :, :, None]>0,1,0).to(torch.float)
     wq = torch.where(q[:, :, None, :] - q[:, None, :, :]>0,1,0).to(torch.float)
     t =  r + torch.einsum('bjc,bijc->bic', r, wq) + torch.einsum('bia,biac->bic', r, wp)  - 1
-    return t
+    return t.relu()
 
 def compute_spv_w(cfg, model, r, p, q):
     num_agents = cfg.num_agents
@@ -65,6 +65,6 @@ def compute_loss(cfg, model, r, p, q, lambd, rho):
 
     constr_vio = spv_w+spv_f
 
-    loss = torch.sum(t) - 2*torch.sum(r) + (constr_vio*lambd).sum() + 0.5*rho*constr_vio.square().sum()
+    loss = t.sum(-1).mean() - 2+r.sum(-1).mean() + (constr_vio*lambd).sum() + 0.5*rho*constr_vio.square().sum()
 
     return loss,constr_vio.sum()
