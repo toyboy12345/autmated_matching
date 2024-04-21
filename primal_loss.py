@@ -67,6 +67,7 @@ def compute_loss(cfg, model, r, p, q, lambd, rho):
 
     obj = t.sum(-1).mean() - 2+r.sum(-1).mean()
 
+    lambd = torch.Tensor(lambd).to(cfg.device)
     loss = obj + (constr_vio*lambd).sum() + 0.5*rho*constr_vio.square().sum()
 
-    return loss,constr_vio.sum(),obj
+    return loss,constr_vio,obj
