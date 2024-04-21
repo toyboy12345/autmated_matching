@@ -65,6 +65,8 @@ def compute_loss(cfg, model, r, p, q, lambd, rho):
 
     constr_vio = spv_w+spv_f
 
-    loss = t.sum(-1).mean() - 2+r.sum(-1).mean() + (constr_vio*lambd).sum() + 0.5*rho*constr_vio.square().sum()
+    obj = t.sum(-1).mean() - 2+r.sum(-1).mean()
 
-    return loss,constr_vio.sum()
+    loss = obj + (constr_vio*lambd).sum() + 0.5*rho*constr_vio.square().sum()
+
+    return loss,constr_vio.sum(),obj
