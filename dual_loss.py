@@ -103,6 +103,6 @@ def compute_constraint_vio(cfg, model, x, y, z, u, v, p, q):
     return total_constraints
 
 def compute_loss(cfg, model, x, y, z, u, v, p, q, lambd, rho):
+    obj = x.sum(-1).mean() + y.sum(-1).mean() - z.sum(-1).sum(-1).mean()
     constr_vio = compute_constraint_vio(cfg,model,x,y,z,u,v,p,q)
-    return (x.sum(-1).mean() + y.sum(-1).mean() - z.sum(-1).sum(-1).mean()
-    + (constr_vio*lambd).sum() + 0.5*rho*constr_vio.square().sum()), constr_vio.sum()
+    return obj + (constr_vio*lambd).sum() + 0.5*rho*constr_vio.square().sum(), constr_vio.sum(), obj
