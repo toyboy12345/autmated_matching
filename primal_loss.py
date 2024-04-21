@@ -55,7 +55,7 @@ def compute_spv_f(cfg, model, r, p, q):
         for w in range(num_agents):
             mask = torch.where(q[:,:,agent_idx]>=q[:,w,agent_idx].view(-1,1),1,0)
             mask = mask.repeat(1,r_mis_agent.shape[1]).view(r_mis_agent.shape[0],r_mis_agent.shape[1],r_mis_agent.shape[2])
-            spv_f[w,agent_idx] = ((r_mis_agent - r_agent)*mask).sum(-2).relu().sum(-1).mean()
+            spv_f[w,agent_idx] = ((r_mis_agent - r_agent)*mask).sum(-1).relu().sum(-1).mean()
     return spv_f
 
 def compute_loss(cfg, model, r, p, q, lambd, rho):
