@@ -7,7 +7,7 @@ from data import Data
 def compute_t(r, p, q):
     wp = torch.where(p[:, :, None, :] - p[:, :, :, None]>0,1,0).to(torch.float)
     wq = torch.where(q[:, :, None, :] - q[:, None, :, :]>0,1,0).to(torch.float)
-    t =  1- r - torch.einsum('bjc,bijc->bic', r, wq) - torch.einsum('bia,biac->bic', r, wp) 
+    t =  1- r - torch.einsum('bic,bijc->bij', r, wp) - torch.einsum('bic,biac->bac', r, wq) 
     return t.relu()
 
 def compute_spv_w(cfg, model, r, p, q):
