@@ -7,7 +7,7 @@ from data import Data
 def compute_t(r, p, q):
     wp = torch.where(p[:, :, None, :] - p[:, :, :, None]>0,1,0).to(torch.float)
     wq = torch.where(q[:, :, None, :] - q[:, None, :, :]>0,1,0).to(torch.float)
-    t =  r + torch.einsum('bjc,bijc->bic', r, wq) + torch.einsum('bia,biac->bic', r, wp)  - 1
+    t =  1- r - torch.einsum('bjc,bijc->bic', r, wq) - torch.einsum('bia,biac->bic', r, wp) 
     return t.relu()
 
 def compute_spv_w(cfg, model, r, p, q):
@@ -65,7 +65,7 @@ def compute_loss(cfg, model, r, p, q, lambd, rho):
 
     constr_vio = spv_w+spv_f
 
-    obj = t.sum(-1).mean() - 2+r.sum(-1).mean()
+    obj = t.sum(-1).mean()
 
     lambd = torch.Tensor(lambd).to(cfg.device)
     loss = obj + (constr_vio*lambd).sum() + 0.5*rho*constr_vio.square().sum()
