@@ -62,7 +62,7 @@ def train_dual(cfg, G, model, include_truncation = False):
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
-        handler = logging.FileHandler(log_fname, 'w')
+        # handler = logging.FileHandler(log_fname, 'w')
         handler.setLevel(logging.INFO)
         formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
         handler.setFormatter(formatter)
@@ -120,7 +120,7 @@ def train_dual(cfg, G, model, include_truncation = False):
                 for j in range(cfg.num_val_batches):
                     P, Q = G.generate_batch(cfg.batch_size)
                     p, q = torch.Tensor(P).to(cfg.device), torch.Tensor(Q).to(cfg.device)
-                    r,t = model(p, q)
+                    x,y,z,u,v = model(p, q)
                     loss,constr_vio,obj = compute_loss(cfg,model,x,y,z,u,v,p,q,lambd,cfg.rho)
                     val_loss += loss.item()
                     val_constr_vio += constr_vio.sum().item()
