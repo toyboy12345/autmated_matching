@@ -108,6 +108,6 @@ def compute_constraint_vio(cfg, model, x, y, z, u, v, p, q):
 
 def compute_loss(cfg, model, x, y, z, u, v, p, q, lambd, rho):
     lambd = torch.Tensor(lambd).to(cfg.device)
-    obj = x.sum(-1).mean() + y.sum(-1).mean() - z.sum(-1).sum(-1).mean()
+    obj = (x.sum(-1) + y.sum(-1) - z.sum(-1).sum(-1)).mean()
     constr_vio = compute_constraint_vio(cfg,model,x,y,z,u,v,p,q)
     return obj + (constr_vio*lambd).sum() + 0.5*rho*constr_vio.square().sum(), constr_vio, obj
