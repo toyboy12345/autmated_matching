@@ -102,7 +102,7 @@ def compute_constraint_vio(cfg, model, x, y, z, u, v, p, q):
     u_loss = compute_uloss(cfg,model,u,p,q)
     v_loss = compute_vloss(cfg,model,v,p,q)
 
-    total_constraints = F.relu(x_loss+y_loss-z_loss-u_loss-v_loss)
+    total_constraints = F.relu(-(x_loss+y_loss-z_loss-u_loss-v_loss))
 
     return total_constraints.mean(0)
 
