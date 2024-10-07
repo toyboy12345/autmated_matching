@@ -6,12 +6,12 @@ from itertools import permutations
 from data import Data
 
 def pref_to_num(p_agent):
-    p_agent = p_agent*3
+    device = p_agent.device
+    p_agent = p_agent.to('cpu').detach().numpy().copy()
     num_agents = p_agent.shape[-1]
-    all_prefs = torch.Tensor(np.array(list(permutations(np.arange(num_agents))))+1).to(p_agent.device)
-    all_prefs = all_prefs.repeat((1,p_agent.shape[0])).view(-1,p_agent.shape[0],num_agents)
-    
-    return torch.where((all_prefs==p_agent).all(axis=2))[0]
+    p_agent = p_agent*num_agents
+    all_pref = np.array(list(permutations(np.arange(num_agents))))
+    return torch.Tensor(np.array([np.where((all_pref+1==pref).all(axis=1))[0][0] for pref in p_agent])).to(device)
 
 def compute_xloss(x):
     return x.repeat(1,x.shape[1]).reshape((-1,x.shape[1],x.shape[1]))
@@ -30,7 +30,7 @@ def compute_uloss(cfg, model, u ,p, q):
     batch_size = p.shape[0]
     device = cfg.device
     G = Data(cfg)
-    all_prefs = torch.Tensor(np.array(list(permutations(np.arange(num_agents))))+1).to(device)/3
+    all_prefs = torch.Tensor(np.array(list(permutations(np.arange(num_agents))))+1).to(device)/num_agents
 
     P = p.to('cpu').detach().numpy().copy()
     Q = q.to('cpu').detach().numpy().copy()
@@ -49,10 +49,10 @@ def compute_uloss(cfg, model, u ,p, q):
         u_mis_agent = u_mis[torch.arange(p.shape[0]),pref_to_num(p[:,agent_idx,:])]
 
         for f in range(num_agents):
-            mask = torch.where(p[:,agent_idx,:]<=p[:,agent_idx,f].view(-1,1),1,0).repeat((1,u_agent.shape[1])).view(u_agent.shape[0],u_agent.shape[1],u_agent.shape[2])
+            mask = torch.where(p[:,agent_idx,:]<p[:,agent_idx,f].view(-1,1),1,0).repeat((1,u_agent.shape[1])).view(u_agent.shape[0],u_agent.shape[1],u_agent.shape[2])
             sum_agent = (u_agent*mask).sum(-1).sum(-1)
 
-            mask_mis = torch.where(all_prefs[:,:]<=all_prefs[:,f].view(-1,1),1,0).repeat((u_mis_agent.shape[0],1)).view(u_mis_agent.shape[0],u_mis_agent.shape[1],u_mis_agent.shape[2])
+            mask_mis = torch.where(all_prefs[:,:]<all_prefs[:,f].view(-1,1),1,0).repeat((u_mis_agent.shape[0],1)).view(u_mis_agent.shape[0],u_mis_agent.shape[1],u_mis_agent.shape[2])
             sum_agent_mis = (u_mis_agent*mask_mis).sum(-1).sum(-1)
             
             for batch in range(batch_size):
@@ -65,7 +65,7 @@ def compute_vloss(cfg, model, v, p, q):
     batch_size = p.shape[0]
     device = cfg.device
     G = Data(cfg)
-    all_prefs = torch.Tensor(np.array(list(permutations(np.arange(num_agents))))+1).to(device)/3
+    all_prefs = torch.Tensor(np.array(list(permutations(np.arange(num_agents))))+1).to(device)/num_agents
 
     P = p.to('cpu').detach().numpy().copy()
     Q = q.to('cpu').detach().numpy().copy()
@@ -84,10 +84,10 @@ def compute_vloss(cfg, model, v, p, q):
         v_mis_agent = v_mis[torch.arange(q.shape[0]),pref_to_num(q[:,:,agent_idx])]
 
         for w in range(num_agents):
-            mask = torch.where(q[:,:,agent_idx]<=q[:,w,agent_idx].view(-1,1),1,0).repeat((1,v_agent.shape[1])).view(v_agent.shape[0],v_agent.shape[1],v_agent.shape[2])
+            mask = torch.where(q[:,:,agent_idx]<q[:,w,agent_idx].view(-1,1),1,0).repeat((1,v_agent.shape[1])).view(v_agent.shape[0],v_agent.shape[1],v_agent.shape[2])
             sum_agent = (v_agent*mask).sum(-1).sum(-1)
 
-            mask_mis = torch.where(all_prefs[:,:]<=all_prefs[:,w].view(-1,1),1,0).repeat((v_mis_agent.shape[0],1)).view(v_mis_agent.shape[0],v_mis_agent.shape[1],v_mis_agent.shape[2])
+            mask_mis = torch.where(all_prefs[:,:]<all_prefs[w,:].view(-1,1),1,0).repeat((v_mis_agent.shape[0],1)).view(v_mis_agent.shape[0],v_mis_agent.shape[1],v_mis_agent.shape[2])
             sum_agent_mis = (v_mis_agent*mask_mis).sum(-1).sum(-1)
 
             for batch in range(batch_size):
