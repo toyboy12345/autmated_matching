@@ -11,7 +11,7 @@ def pref_to_num(p_agent):
     num_agents = p_agent.shape[-1]
     p_agent = p_agent*num_agents
     all_pref = np.array(list(permutations(np.arange(num_agents))))
-    return torch.Tensor(np.array([np.where((all_pref+1==pref).all(axis=1))[0][0] for pref in p_agent])).to(device)
+    return torch.Tensor(np.array([np.where((all_pref+1==pref).all(axis=1))[0][0] for pref in p_agent])).to(device).to(int)
 
 def compute_xloss(x):
     return x.repeat(1,x.shape[1]).reshape((-1,x.shape[1],x.shape[1]))
