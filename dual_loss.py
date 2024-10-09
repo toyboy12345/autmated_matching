@@ -42,21 +42,19 @@ def compute_uloss(cfg, model, u ,p, q):
 
         _,_,_,u_mis,_ = model(p_mis.view(-1, num_agents, num_agents), q_mis.view(-1, num_agents, num_agents))
         u_mis = u_mis.view(-1,u.shape[2],num_agents,u.shape[2],num_agents)
-        u_mis = u_mis[:,:,agent_idx,:,:]
 
         u_agent = u[:,agent_idx,:,:]
 
-        u_mis_agent = u_mis[torch.arange(p.shape[0]),pref_to_num(p[:,agent_idx,:])]
+        u_mis_agent = u_mis[torch.arange(p.shape[0]),:,agent_idx,pref_to_num(p[:,agent_idx,:])]
 
         for f in range(num_agents):
-            mask = torch.where(p[:,agent_idx,:]<p[:,agent_idx,f].view(-1,1),1,0).repeat((1,u_agent.shape[1])).view(u_agent.shape[0],u_agent.shape[1],u_agent.shape[2])
-            sum_agent = (u_agent*mask).sum(-1).sum(-1)
+            mask = torch.where(p[:,agent_idx,:]<p[:,agent_idx,f].view(-1,1),1,0)
+            sum_agent = torch.einsum("bj,bij->b",mask.to(float),u_agent.to(float))
 
-            mask_mis = torch.where(all_prefs[:,:]<all_prefs[:,f].view(-1,1),1,0).repeat((u_mis_agent.shape[0],1)).view(u_mis_agent.shape[0],u_mis_agent.shape[1],u_mis_agent.shape[2])
-            sum_agent_mis = (u_mis_agent*mask_mis).sum(-1).sum(-1)
+            mask_mis = torch.where(all_prefs[:,:]<all_prefs[:,f].view(-1,1),1,0)
+            sum_mis_agent = torch.einsum("ij,bij->b",mask_mis.to(float),u_mis_agent.to(float))
             
-            for batch in range(batch_size):
-                ulosses[batch,agent_idx,f] = (sum_agent_mis-sum_agent)[batch]
+            ulosses[:,agent_idx,f] = (sum_agent-sum_mis_agent)
         
     return ulosses
 
@@ -77,22 +75,19 @@ def compute_vloss(cfg, model, v, p, q):
 
         _,_,_,_,v_mis = model(p_mis.view(-1, num_agents, num_agents), q_mis.view(-1, num_agents, num_agents))
         v_mis = v_mis.view(-1,v.shape[2],num_agents,v.shape[2],num_agents)
-        v_mis = v_mis[:,:,agent_idx,:,:]
 
         v_agent = v[:,agent_idx,:,:]
-
-        v_mis_agent = v_mis[torch.arange(q.shape[0]),pref_to_num(q[:,:,agent_idx])]
+        v_mis_agent = v_mis[torch.arange(q.shape[0]),:,agent_idx,pref_to_num(q[:,:,agent_idx])]
 
         for w in range(num_agents):
-            mask = torch.where(q[:,:,agent_idx]<q[:,w,agent_idx].view(-1,1),1,0).repeat((1,v_agent.shape[1])).view(v_agent.shape[0],v_agent.shape[1],v_agent.shape[2])
-            sum_agent = (v_agent*mask).sum(-1).sum(-1)
+            mask = torch.where(q[:,:,agent_idx]<q[:,w,agent_idx].view(-1,1),1,0)
+            sum_agent = torch.einsum("bj,bij->b", mask.to(float), v_agent.to(float))
 
-            mask_mis = torch.where(all_prefs[:,:]<all_prefs[w,:].view(-1,1),1,0).repeat((v_mis_agent.shape[0],1)).view(v_mis_agent.shape[0],v_mis_agent.shape[1],v_mis_agent.shape[2])
-            sum_agent_mis = (v_mis_agent*mask_mis).sum(-1).sum(-1)
+            mask_mis = torch.where(all_prefs[:,:]<all_prefs[:,w].view(-1,1),1,0)
+            sum_agent_mis = torch.einsum("ij,bij->b", mask_mis.to(float), v_mis_agent.to(float))
 
-            for batch in range(batch_size):
-                vlosses[batch,w,agent_idx] = (sum_agent_mis-sum_agent)[batch]
-    
+            vlosses[:,w,agent_idx] = sum_agent - sum_agent_mis
+
     return vlosses
 
 def compute_constraint_vio(cfg, model, x, y, z, u, v, p, q):
