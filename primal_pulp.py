@@ -106,7 +106,7 @@ for p1 in range(6):
                             problem += gs[p1, p2, p3, q1, q2, q3, w, 2] == gs[change[p1][0], change[p2][0], change[p3][0], q2, q1, q3, w, 2]
 
 print("Start optimizing...")
-problem.solve()
+problem.solve(pulp.GLPK_CMD(path = 'C:\\Users\\tohya\\winglpk-4.65\\glpk-4.65\\w64\\glpsol.exe'))
 
 # Output results
 with open("log_pulp.txt", 'w') as f:
